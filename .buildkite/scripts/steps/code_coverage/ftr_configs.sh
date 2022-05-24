@@ -4,15 +4,14 @@ set -euo pipefail
 
 source .buildkite/scripts/common/util.sh
 source .buildkite/scripts/steps/code_coverage/util.sh
+source .buildkite/scripts/steps/code_coverage/node_scripts.sh
 
 export CODE_COVERAGE=1 # Kibana is bootstrapped differently for code coverage
 echo "--- Print KIBANA_DIR"
 echo "### KIBANA_DIR: $KIBANA_DIR"
 .buildkite/scripts/bootstrap.sh
 
-echo "--- Build Platform Plugins"
-NODE_OPTIONS=--max_old_space_size=14336 node scripts/build_kibana_platform_plugins \
-  --no-examples --test-plugins --workers 4
+buildPlatformPlugins
 
 is_test_execution_step
 
@@ -33,8 +32,8 @@ if [[ "$configs" == "" ]]; then
   configs=$(jq -r '.groups[env.JOB_NUM | tonumber].names | .[]' ftr_run_order.json)
 fi
 
-echo "### Configs"
-echo $configs
+echo "--- Configs"
+echo "${configs[@]}"
 
 failedConfigs=""
 results=()
@@ -47,17 +46,11 @@ while read -r config; do
   echo "--- Print config name"
   echo "### config: $config"
 
-  echo "--- $ node scripts/functional_tests --config $config --exclude-tag ''skipCoverage''"
   start=$(date +%s)
 
   # prevent non-zero exit code from breaking the loop
   set +e
-  NODE_OPTIONS=--max_old_space_size=16384 \
-    ./node_modules/.bin/nyc \
-    --nycrc-path ./src/dev/code_coverage/nyc_config/nyc.server.config.js \
-    node scripts/functional_tests \
-    --config="$config" \
-    --exclude-tag "skipCoverage"
+  runFTRInstrumented "$config"
   lastCode=$?
   set -e
 
@@ -65,7 +58,7 @@ while read -r config; do
     withoutExtension=${1%.*}
     dasherized=$(echo "$withoutExtension" | tr '\/' '\-')
   }
-  dasherize $config
+  dasherize "$config"
 
   if [[ -d "$KIBANA_DIR/target/kibana-coverage/functional" ]]; then
     echo "--- Server and / or Client side code coverage collected"
@@ -73,8 +66,6 @@ while read -r config; do
       mv target/kibana-coverage/functional/coverage-final.json "target/kibana-coverage/functional/${dasherized}-server-coverage.json"
     fi
   fi
-  #  echo "--- Replace paths in configs loop, for SERVER COVERAGE"
-  #  replacePaths "$KIBANA_DIR/target/kibana-coverage/functional"
 
   timeSec=$(($(date +%s) - start))
   if [[ $timeSec -gt 60 ]]; then

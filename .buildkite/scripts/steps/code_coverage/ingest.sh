@@ -55,7 +55,6 @@ echo "--- Final replace for functional"
 #fileHeads "target/file-heads-functional-before-final-replace.txt" target/kibana-coverage/functional
 #collect target/collect-functional-before-final-replace.tar.gz target/kibana-coverage/functional
 
-#replacePaths target/kibana-coverage/functional
 echo "### KIBANA_DIR: $KIBANA_DIR"
 sed -ie "s|LEETRE|${KIBANA_DIR}|g" target/kibana-coverage/functional/*.json
 
