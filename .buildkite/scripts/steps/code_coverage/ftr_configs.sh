@@ -88,7 +88,6 @@ while read -r config; do
     fi
   fi
 
-  #  dirListing "target/dir-listing-$dasherized.txt" target/kibana-coverage/functional
   echo "--- Config complete: $config"
 done <<<"$configs"
 
@@ -99,17 +98,13 @@ done <<<"$configs"
 # So, we merge them here.
 if [[ -d "$functionalTarget" ]]; then
   reportMergeFunctional
-  uniqueifyFunctional
+  uniqueifyFunctional "$(date +%s)"
 else
   echo "--- Code coverage not found in: $functionalTarget"
 fi
 
-#dirListing "target/dir-listing-functional-post-merge.txt" target/kibana-coverage/functional
-#fileHeads "target/file-heads-functional-post-merge-before-replace.txt" target/kibana-coverage/functional
-
 echo "--- Replace paths after all configs:"
 replacePaths "$KIBANA_DIR/target/kibana-coverage/functional"
-#fileHeads "target/file-heads-functional-after-replace.txt" target/kibana-coverage/functional
 
 if [[ "$failedConfigs" ]]; then
   buildkite-agent meta-data set "$FAILED_CONFIGS_KEY" "$failedConfigs"
