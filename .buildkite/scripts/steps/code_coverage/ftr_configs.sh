@@ -3,36 +3,34 @@
 set -euo pipefail
 
 source .buildkite/scripts/common/util.sh
+source .buildkite/scripts/steps/code_coverage/merge.sh
 source .buildkite/scripts/steps/code_coverage/util.sh
 source .buildkite/scripts/steps/code_coverage/node_scripts.sh
 
 export CODE_COVERAGE=1 # Kibana is bootstrapped differently for code coverage
-echo "--- Print KIBANA_DIR"
-echo "### KIBANA_DIR: $KIBANA_DIR"
+echo "--- KIBANA_DIR: $KIBANA_DIR"
 .buildkite/scripts/bootstrap.sh
-
 buildPlatformPlugins
-
 is_test_execution_step
 
 export JOB_NUM=$BUILDKITE_PARALLEL_JOB
 export JOB=ftr-configs-${JOB_NUM}
 
+functionalTarget="$KIBANA_DIR/target/kibana-coverage/functional"
 FAILED_CONFIGS_KEY="${BUILDKITE_STEP_ID}${BUILDKITE_PARALLEL_JOB:-0}"
 
 # a FTR failure will result in the script returning an exit code of 10
 exitCode=0
-
 configs="${FTR_CONFIG:-}"
 
 if [[ "$configs" == "" ]]; then
-  echo "--- downloading ftr test run order"
+  echo "--- Downloading ftr test run order"
   buildkite-agent artifact download ftr_run_order.json .
   #  configs=$(jq -r '.groups[env.JOB_NUM | tonumber].names | first' ftr_run_order.json)
   configs=$(jq -r '.groups[env.JOB_NUM | tonumber].names | .[]' ftr_run_order.json)
 fi
 
-echo "--- Configs"
+echo "--- Configs for this FTR Group:"
 echo "${configs[@]}"
 
 failedConfigs=""
@@ -42,9 +40,7 @@ while read -r config; do
   if [[ ! "$config" ]]; then
     continue
   fi
-
-  echo "--- Print config name"
-  echo "### config: $config"
+  echo "--- Begin config $config"
 
   start=$(date +%s)
 
@@ -60,7 +56,7 @@ while read -r config; do
   }
   dasherize "$config"
 
-  if [[ -d "$KIBANA_DIR/target/kibana-coverage/functional" ]]; then
+  if [[ -d "$functionalTarget" ]]; then
     echo "--- Server and / or Client side code coverage collected"
     if [[ -f "target/kibana-coverage/functional/coverage-final.json" ]]; then
       mv target/kibana-coverage/functional/coverage-final.json "target/kibana-coverage/functional/${dasherized}-server-coverage.json"
@@ -92,7 +88,8 @@ while read -r config; do
     fi
   fi
 
-  dirListing "target/dir-listing-$dasherized.txt" target/kibana-coverage/functional
+  #  dirListing "target/dir-listing-$dasherized.txt" target/kibana-coverage/functional
+  echo "--- Config complete: $config"
 done <<<"$configs"
 
 #dirListing "target/dir-listing-functional-post-loop.txt" target/kibana-coverage/functional
@@ -100,21 +97,17 @@ done <<<"$configs"
 
 # Each browser unload event, creates a new coverage file.
 # So, we merge them here.
-if [[ -d "$KIBANA_DIR/target/kibana-coverage/functional" ]]; then
-  echo "--- Merging code coverage for FTR Configs"
-  NODE_OPTIONS=--max_old_space_size=16384 yarn nyc report \
-    --nycrc-path src/dev/code_coverage/nyc_config/nyc.functional.config.js --reporter json
-  rm -rf target/kibana-coverage/functional/*
-  mv target/kibana-coverage/functional-combined/coverage-final.json \
-    "target/kibana-coverage/functional/$(date +%s)-coverage-final.json"
+if [[ -d "$functionalTarget" ]]; then
+  reportMergeFunctional
+  uniqueifyFunctional
 else
-  echo "--- Code coverage not found in: $KIBANA_DIR/target/kibana-coverage/functional"
+  echo "--- Code coverage not found in: $functionalTarget"
 fi
 
 #dirListing "target/dir-listing-functional-post-merge.txt" target/kibana-coverage/functional
 #fileHeads "target/file-heads-functional-post-merge-before-replace.txt" target/kibana-coverage/functional
 
-echo "--- Replace paths OUTSIDE OF configs loop, FOR FUNCTIONAL COVERAGE"
+echo "--- Replace paths after all configs:"
 replacePaths "$KIBANA_DIR/target/kibana-coverage/functional"
 #fileHeads "target/file-heads-functional-after-replace.txt" target/kibana-coverage/functional
 
@@ -122,7 +115,7 @@ if [[ "$failedConfigs" ]]; then
   buildkite-agent meta-data set "$FAILED_CONFIGS_KEY" "$failedConfigs"
 fi
 
-echo "--- FTR configs complete"
+echo "--- FTR configs complete, result(s):"
 printf "%s\n" "${results[@]}"
 echo ""
 

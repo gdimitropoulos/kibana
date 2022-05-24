@@ -21,3 +21,10 @@ runFTRInstrumented() {
     --config="$ftrConfig" \
     --exclude-tag "skipCoverage"
 }
+
+reportMergeFunctional() {
+  echo "--- Merging code coverage for FTR Configs"
+
+  NODE_OPTIONS=--max_old_space_size=16384 yarn nyc report \
+    --nycrc-path src/dev/code_coverage/nyc_config/nyc.functional.config.js --reporter json
+}

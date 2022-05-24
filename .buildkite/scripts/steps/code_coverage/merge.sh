@@ -64,3 +64,12 @@ splitMerge() {
 listReports() {
   ls -R $base
 }
+
+uniqueifyFunctional() {
+  # Drop the json files that where report-merged.
+  rm -rf target/kibana-coverage/functional/*
+
+  # Move from report-merge target dir, to: target/kibana-coverage/functional
+  mv target/kibana-coverage/functional-combined/coverage-final.json \
+    "target/kibana-coverage/functional/$(date +%s)-coverage-final.json"
+}
