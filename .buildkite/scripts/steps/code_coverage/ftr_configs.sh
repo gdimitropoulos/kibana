@@ -16,6 +16,11 @@ is_test_execution_step
 export JOB_NUM=$BUILDKITE_PARALLEL_JOB
 export JOB=ftr-configs-${JOB_NUM}
 
+dasherize() {
+  local withoutExtension=${1%.*}
+  dasherized=$(echo "$withoutExtension" | tr '\/' '\-')
+}
+
 functionalTarget="$KIBANA_DIR/target/kibana-coverage/functional"
 FAILED_CONFIGS_KEY="${BUILDKITE_STEP_ID}${BUILDKITE_PARALLEL_JOB:-0}"
 
@@ -26,7 +31,6 @@ configs="${FTR_CONFIG:-}"
 if [[ "$configs" == "" ]]; then
   echo "--- Downloading ftr test run order"
   buildkite-agent artifact download ftr_run_order.json .
-  #  configs=$(jq -r '.groups[env.JOB_NUM | tonumber].names | first' ftr_run_order.json)
   configs=$(jq -r '.groups[env.JOB_NUM | tonumber].names | .[]' ftr_run_order.json)
 fi
 
@@ -50,10 +54,6 @@ while read -r config; do
   lastCode=$?
   set -e
 
-  dasherize() {
-    withoutExtension=${1%.*}
-    dasherized=$(echo "$withoutExtension" | tr '\/' '\-')
-  }
   dasherize "$config"
 
   if [[ -d "$functionalTarget" ]]; then
